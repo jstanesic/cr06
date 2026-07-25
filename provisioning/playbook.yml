@@ -1,0 +1,195 @@
+- name: Wait until WinRM/PSRP is reachable on every Windows host
+  hosts: windows-hosts
+  gather_facts: false
+  tasks:
+    - name: Wait for PSRP listener to accept connections
+      ansible.builtin.wait_for_connection:
+        delay: 0
+        sleep: 10
+        timeout: 900
+
+- name: Active Directory — promote domain controller (dc01)
+  hosts: domain-controllers
+  gather_facts: false
+  vars:
+    ad_domain_name: cadmus.local
+    ad_admin_password: Password123!
+    local_trainee_password: Password123!
+    domain_employee_password: Password123!
+  roles:
+    - name: ansible-role-user-access-windows
+      user_access_username: localadmin
+      user_access_password: '{{ local_trainee_password }}'
+      user_access_rdp: True
+      user_access_admin: True
+  tasks:
+    - name: Ensure AD DS Windows feature is installed
+      register: ad_feature
+      ansible.windows.win_feature:
+        name: AD-Domain-Services
+        include_management_tools: true
+        state: present
+    - name: Detect whether host is already promoted to a domain controller
+      register: dc_role
+      changed_when: false
+      ansible.windows.win_shell: >-
+        (Get-CimInstance Win32_ComputerSystem).DomainRole
+    - name: Set a strong password on the built-in Administrator account
+      when: (dc_role.stdout | trim | int) < 4
+      ansible.windows.win_user:
+        name: Administrator
+        password: '{{ ad_admin_password }}'
+        password_never_expires: true
+        state: present
+    - name: Promote host to domain controller
+      when: ad_feature is succeeded
+      microsoft.ad.domain:
+        dns_domain_name: '{{ ad_domain_name }}'
+        safe_mode_password: '{{ ad_admin_password }}'
+        reboot: true
+    - name: Wait for AD DS to come up after the post-promotion reboot
+      ansible.windows.win_wait_for:
+        host: 127.0.0.1
+        port: 389
+        delay: 30
+        timeout: 600
+    # Lab C1 delegates "Reset user passwords" on this OU to a trainee-created
+    # Helpdesk group, so the OU (and a couple of sample accounts) must exist
+    # before the lab starts.
+    - name: Ensure the Employees OU exists
+      microsoft.ad.ou:
+        name: Employees
+        path: DC={{ ad_domain_name.split(".") | join(",DC=") }}
+        state: present
+    - name: Create sample employee accounts in the Employees OU
+      loop:
+        - jsmith
+        - agarcia
+      microsoft.ad.user:
+        name: '{{ item }}'
+        sam_account_name: '{{ item }}'
+        upn: '{{ item }}@{{ ad_domain_name }}'
+        path: OU=Employees,DC={{ ad_domain_name.split(".") | join(",DC=") }}
+        password: '{{ domain_employee_password }}'
+        password_never_expires: true
+        enabled: true
+        state: present
+    - name: Create the domain account trainees use to administer the domain
+      microsoft.ad.user:
+        name: domainuser
+        sam_account_name: domainuser
+        upn: domainuser@{{ ad_domain_name }}
+        password: Password123!
+        password_never_expires: true
+        enabled: true
+        state: present
+        groups:
+          add:
+            - Domain Admins
+    - name: Ensure C:\SCT exists for Policy Analyzer / security baseline staging
+      ansible.windows.win_file:
+        path: C:\SCT
+        state: directory
+    - name: Ensure C:\Scripts exists for lab verification scripts
+      ansible.windows.win_file:
+        path: C:\Scripts
+        state: directory
+    - name: Deploy Verify-LabC1.ps1
+      ansible.windows.win_copy:
+        src: files/Verify-LabC1.ps1
+        dest: C:\Scripts\Verify-LabC1.ps1
+
+- name: Active Directory — join Windows member servers and workstations to the domain
+  hosts: windows-members
+  gather_facts: false
+  vars:
+    ad_domain_name: cadmus.local
+    ad_dc_ip: 10.6.10.3
+    ad_admin_password: Password123!
+    local_trainee_password: Password123!
+  roles:
+    - name: ansible-role-user-access-windows
+      user_access_username: localadmin
+      user_access_password: '{{ local_trainee_password }}'
+      user_access_rdp: True
+      user_access_admin: True
+  tasks:
+    - name: Point DNS at the domain controller on all adapters
+      ansible.windows.win_dns_client:
+        adapter_names: '*'
+        dns_servers:
+          - '{{ ad_dc_ip }}'
+    - name: Join host to the AD domain
+      microsoft.ad.membership:
+        dns_domain_name: '{{ ad_domain_name }}'
+        domain_admin_user: Administrator@{{ ad_domain_name }}
+        domain_admin_password: '{{ ad_admin_password }}'
+        state: domain
+        reboot: true
+
+- name: Member server (srv01) — stage baseline tooling and Lab B1 verification
+  hosts: member-servers
+  gather_facts: false
+  tasks:
+    - name: Ensure C:\SCT exists for Policy Analyzer / Windows Server 2025 baseline staging
+      ansible.windows.win_file:
+        path: C:\SCT
+        state: directory
+    - name: Warn that the Security Compliance Toolkit is not yet baked into the image
+      ansible.builtin.debug:
+        msg: >-
+          TODO: C:\SCT\PolicyAnalyzer.exe and the
+          WindowsServer2025SecurityBaseline files are not present. Download
+          the Microsoft Security Compliance Toolkit from
+          https://www.microsoft.com/download/details.aspx?id=55319 and either
+          bake it into the windows-server-2025-x86_64 image at C:\SCT\, or
+          set sct_download_url and add a win_get_url fetch task here.
+    - name: Ensure C:\Scripts exists for lab verification scripts
+      ansible.windows.win_file:
+        path: C:\Scripts
+        state: directory
+    - name: Deploy Verify-LabB1.ps1
+      ansible.windows.win_copy:
+        src: files/Verify-LabB1.ps1
+        dest: C:\Scripts\Verify-LabB1.ps1
+
+- name: Workstation (cli02) — stage baseline tooling, Sysmon installer, and Lab A1/D1 verification
+  hosts: cli02
+  gather_facts: false
+  tasks:
+    - name: Ensure C:\SCT exists for Policy Analyzer / Windows 11 baseline staging
+      ansible.windows.win_file:
+        path: C:\SCT
+        state: directory
+    - name: Warn that the Security Compliance Toolkit is not yet baked into the image
+      ansible.builtin.debug:
+        msg: >-
+          TODO: C:\SCT\PolicyAnalyzer.exe and the Windows11SecurityBaseline
+          files are not present. Download the Microsoft Security Compliance
+          Toolkit from https://www.microsoft.com/download/details.aspx?id=55319
+          and either bake it into the windows-11-x86_64 image at C:\SCT\, or
+          set sct_download_url and add a win_get_url fetch task here.
+    - name: Ensure C:\Installs\Sysmon exists
+      ansible.windows.win_file:
+        path: C:\Installs\Sysmon
+        state: directory
+    - name: Fetch the Sysmon installer from Sysinternals
+      ansible.windows.win_get_url:
+        url: https://download.sysinternals.com/files/Sysmon.zip
+        dest: C:\Installs\Sysmon\Sysmon.zip
+    - name: Unzip the Sysmon installer
+      community.windows.win_unzip:
+        src: C:\Installs\Sysmon\Sysmon.zip
+        dest: C:\Installs\Sysmon
+    - name: Ensure C:\Scripts exists for lab verification scripts
+      ansible.windows.win_file:
+        path: C:\Scripts
+        state: directory
+    - name: Deploy Verify-LabA1.ps1
+      ansible.windows.win_copy:
+        src: files/Verify-LabA1.ps1
+        dest: C:\Scripts\Verify-LabA1.ps1
+    - name: Deploy Verify-LabD1.ps1
+      ansible.windows.win_copy:
+        src: files/Verify-LabD1.ps1
+        dest: C:\Scripts\Verify-LabD1.ps1

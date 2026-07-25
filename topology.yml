@@ -1,0 +1,117 @@
+name: cr06
+hosts:
+  - name: dc01
+    flavor: c2_r4_d40
+    base_box:
+      # Deliberate override — no preloaded Windows Server 2025 image exists yet.
+      # See report: this course requires Windows Server 2025 (AD DS) and
+      # Windows 11 Enterprise, newer than the Windows Server 2019 image used
+      # by cr08/cr09.
+      image: windows-server-2025-x86_64
+      mgmt_user: windows
+      mgmt_protocol: winrm
+    hidden: false
+  - name: srv01
+    flavor: c2_r4_d40
+    base_box:
+      image: windows-server-2025-x86_64
+      mgmt_user: windows
+      mgmt_protocol: winrm
+    hidden: false
+  - name: cli01
+    flavor: c2_r4_d40
+    base_box:
+      # Deliberate override — Windows 11 Enterprise, required by the framework
+      # doc; no preloaded Windows 11 client image exists yet.
+      image: windows-11-x86_64
+      mgmt_user: windows
+      mgmt_protocol: winrm
+    hidden: false
+  - name: cli02
+    flavor: c2_r4_d40
+    base_box:
+      image: windows-11-x86_64
+      mgmt_user: windows
+      mgmt_protocol: winrm
+    hidden: false
+routers:
+  - name: r-corp
+    flavor: standard.small
+    base_box:
+      image: debian-12-x86_64
+      mgmt_user: debian
+      mgmt_protocol: ssh
+    hidden: false
+networks:
+  - name: corp
+    cidr: 10.6.10.0/24
+    accessible_by_user: true
+    hidden: false
+wan:
+  name: wan
+  cidr: 100.100.100.0/24
+net_mappings:
+  - host: dc01
+    network: corp
+    ip: 10.6.10.3
+  - host: srv01
+    network: corp
+    ip: 10.6.10.4
+  - host: cli01
+    network: corp
+    ip: 10.6.10.5
+  - host: cli02
+    network: corp
+    ip: 10.6.10.6
+router_mappings:
+  - router: r-corp
+    network: corp
+    ip: 10.6.10.1
+groups:
+  - name: domain-controllers
+    nodes:
+      - dc01
+  - name: member-servers
+    nodes:
+      - srv01
+  - name: workstations
+    nodes:
+      - cli01
+      - cli02
+  - name: windows-members
+    nodes:
+      - srv01
+      - cli01
+      - cli02
+  - name: windows-hosts
+    nodes:
+      - dc01
+      - srv01
+      - cli01
+      - cli02
+  - name: monitor-os
+    nodes:
+      - dc01
+      - srv01
+      - cli01
+      - cli02
+  - name: monitor-icmp
+    nodes:
+      - dc01
+      - srv01
+      - cli01
+      - cli02
+      - r-corp
+monitoring_targets:
+  - node: dc01
+    targets:
+      - port: 389
+        interface: corp
+  - node: srv01
+    targets:
+      - port: 445
+        interface: corp
+  - node: cli02
+    targets:
+      - port: 3389
+        interface: corp
