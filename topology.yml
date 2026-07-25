@@ -89,29 +89,17 @@ groups:
       - srv01
       - cli01
       - cli02
-  - name: monitor-os
-    nodes:
-      - dc01
-      - srv01
-      - cli01
-      - cli02
-  - name: monitor-icmp
-    nodes:
-      - dc01
-      - srv01
-      - cli01
-      - cli02
-      - r-corp
-monitoring_targets:
-  - node: dc01
-    targets:
-      - port: 389
-        interface: corp
-  - node: srv01
-    targets:
-      - port: 445
-        interface: corp
-  - node: cli02
-    targets:
-      - port: 3389
-        interface: corp
+# Monitoring disabled — platform rejects monitoring_targets (see cr08 topology.yml).
+#  - name: monitor-os
+#    nodes:
+#      - dc01
+#      - srv01
+#      - cli01
+#      - cli02
+#  - name: monitor-icmp
+#    nodes:
+#      - dc01
+#      - srv01
+#      - cli01
+#      - cli02
+#      - r-corp
