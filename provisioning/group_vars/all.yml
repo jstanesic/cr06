@@ -1,1 +1,2 @@
 ad_domain_name: cadmus.local
+ansible_shell_type: powershell
