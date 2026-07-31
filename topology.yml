@@ -16,13 +16,6 @@ hosts:
   - name: cli01
     flavor: c4_r5_d50
     base_box:
-      image: windows-10-x86_64
-      mgmt_user: windows
-      mgmt_protocol: winrm
-    hidden: false
-  - name: cli02
-    flavor: c4_r5_d50
-    base_box:
       image: windows-11-x86_64
       mgmt_user: windows
     hidden: false
@@ -55,9 +48,6 @@ net_mappings:
     ip: 10.0.0.4
   - host: cli01
     network: corp
-    ip: 10.0.0.5
-  - host: cli02
-    network: corp
     ip: 10.0.0.6
 
 router_mappings:
@@ -75,29 +65,24 @@ groups:
   - name: workstations
     nodes:
       - cli01
-      - cli02
   - name: windows-members
     nodes:
       - srv01
       - cli01
-      - cli02
   - name: windows-hosts
     nodes:
       - dc01
       - srv01
       - cli01
-      - cli02
 # Monitoring disabled — platform rejects monitoring_targets (see cr08 topology.yml).
 #  - name: monitor-os
 #    nodes:
 #      - dc01
 #      - srv01
 #      - cli01
-#      - cli02
 #  - name: monitor-icmp
 #    nodes:
 #      - dc01
 #      - srv01
 #      - cli01
-#      - cli02
 #      - r-corp

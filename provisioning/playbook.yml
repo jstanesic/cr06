@@ -171,8 +171,8 @@
         src: files/Verify-LabB1.ps1
         dest: C:\Scripts\Verify-LabB1.ps1
 
-- name: Workstation (cli02) — stage baseline tooling, Sysmon installer, and Lab A1/D1 verification
-  hosts: cli02
+- name: Workstation (cli01) — stage baseline tooling, Sysmon installer, and Lab A1/D1 verification
+  hosts: cli01
   gather_facts: false
   tasks:
     - name: Ensure C:\SCT exists for Policy Analyzer / Windows 11 baseline staging
