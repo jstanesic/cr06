@@ -86,6 +86,24 @@
         groups:
           add:
             - Domain Admins
+    # Lab C1 Phase 2 starts from an insecure "before" state: the Helpdesk
+    # operator has been handed full Domain Admin rights "for convenience" so it
+    # can reset user passwords. The trainee removes it from Domain Admins,
+    # places it in a purpose-built Helpdesk group, and delegates ONLY the
+    # "Reset user passwords" right on the Employees OU — then tests the reset
+    # (via "Run as different user") against jsmith / agarcia above.
+    - name: Create the Helpdesk operator account (over-privileged on purpose — Domain Admin)
+      microsoft.ad.user:
+        name: helpdesk1
+        sam_account_name: helpdesk1
+        upn: helpdesk1@{{ ad_domain_name }}
+        password: '{{ domain_employee_password }}'
+        password_never_expires: true
+        enabled: true
+        state: present
+        groups:
+          add:
+            - Domain Admins
     - name: Ensure C:\SCT exists for Policy Analyzer / security baseline staging
       ansible.windows.win_file:
         path: C:\SCT
